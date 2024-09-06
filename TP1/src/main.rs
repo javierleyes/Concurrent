@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 use serde::Serialize;
 use std::io::Write;
 use std::collections::HashMap;
+use std::cmp::Ordering;
 
 #[derive(Serialize, Debug)]
 struct row_weapon {
@@ -15,9 +16,9 @@ struct row_weapon {
 
 #[derive(Serialize)]
 struct weapon {
-    name: u32,
+    name: String,
     amount_deaths: u32,
-    average_distance: u32,
+    average_distance: f32,
 }
 
 #[derive(Serialize)]
@@ -140,13 +141,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    let mut top_weapons: Vec<weapon> = Vec::new();
+
     for (key, value) in weapons.iter() {
         let average_distance = value.accumulator_distance / value.amount_deaths as f32;
         println!("Weapon: {}, Amount of deaths: {}, Average distance: {:.2}", key, value.amount_deaths, average_distance);
+
+        let weapon = weapon {
+            name: value.name.clone(),
+            amount_deaths: value.amount_deaths,
+            average_distance: average_distance,
+        };
+
+        top_weapons.push(weapon);
     }
 
-    // TODO: Sort the weapons by the amount of kills, then by the name of the weapon, and get the top 10.
+    // Sort the weapons by the amount of kills (descending), then by the name (ascending).
+    top_weapons.sort_by(|a, b| {
+        b.amount_deaths.cmp(&a.amount_deaths).then_with(|| a.name.cmp(&b.name))
+    });
 
+    println!("\nList of top weapons\n");
+
+    // Get the top 10.
+    for weapon in top_weapons.iter().take(10) {
+        println!("Weapon: {}, Amount of deaths: {}, Average distance: {:.2}", weapon.name, weapon.amount_deaths, weapon.average_distance);
+    }
 
     Ok(())
 }
