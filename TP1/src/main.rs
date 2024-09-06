@@ -8,45 +8,32 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 
 #[derive(Serialize, Debug)]
-struct row_weapon {
+struct RowWeapon {
     name: String,
     amount_deaths: u32,
     accumulator_distance: f32,
 }
 
 #[derive(Serialize)]
-struct weapon {
+struct Weapon {
     name: String,
     amount_deaths: u32,
-    percentage_deaths: f32,
+    deaths_percentage: f32,
     average_distance: f32,
 }
 
 #[derive(Serialize)]
-struct output_json {
-    padron: u32,
-    top_killers: u8,
-    top_weapons: bool,
+struct WeaponStats {
+    deaths_percentage: f32,
+    average_distance: f32,
 }
 
-// fn main() -> std::io::Result<()> {
-//     let output_json = output_json {
-//         padron: 94455,
-//         top_killers: 30,
-//         top_weapons: false,
-//     };
-
-//     // Serialize the struct to a JSON string
-//     let json = serde_json::to_string(&output_json).expect("Failed to serialize");
-
-//     // Write the JSON string to a file
-//     let mut file = File::create("person.json")?;
-//     file.write_all(json.as_bytes())?;
-
-//     println!("JSON written to person.json");
-
-//     Ok(())
-// }
+#[derive(Serialize)]
+struct OutputJson {
+    padron: u32,
+    // top_killers: u8, TODO: Implement this.
+    top_weapons: HashMap<String, WeaponStats>,
+}
 
 fn read_csv(file_path: &str) -> Result<csv::Reader<File>, Box<dyn Error>> {
     let file = File::open(file_path)?;
@@ -72,13 +59,29 @@ fn get_arguments() -> (String, String, String) {
     (file_path, amount_workers, output_json_name)
 }
 
+fn write_json_to_file(output_json: &OutputJson, output_json_name: &str) -> std::io::Result<()> {
+    // Pretty print the top_weapons part of the struct
+    let serialized = serde_json::to_string_pretty(&output_json.top_weapons).unwrap();
+    println!("{}", serialized);
+
+    // Serialize the struct to a JSON string.
+    let json = serde_json::to_string(&output_json).expect("Failed to serialize");
+
+    // Write the JSON string to a file.
+    let mut file = File::create(output_json_name)?;
+
+    // Write the JSON string to a file.
+    file.write_all(json.as_bytes())?;
+
+    println!("JSON written.");
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let (file_path, amount_workers, output_json_name) = get_arguments();
 
-    println!("File path: {}", file_path);
-    println!("Amount of workers: {}", amount_workers);
-    println!("Output JSON name: {}", output_json_name);
-
+    // TODO: Move this code to a function.
     let file = File::open(file_path)?;
 
     // Create a mutable CSV reader
@@ -91,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Go back to the start of the file.
     rdr.seek(csv::Position::new())?;
 
-    let mut weapons: HashMap<String, row_weapon> = HashMap::new();
+    let mut weapons: HashMap<String, RowWeapon> = HashMap::new();
 
     rdr.records().next();
     for result in rdr.records() {
@@ -119,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         } else {
 
-            let row_weapon = row_weapon {
+            let row_weapon = RowWeapon {
                 name: weapon_name.clone(),
                 amount_deaths: 1,
                 accumulator_distance: {
@@ -142,16 +145,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut top_weapons: Vec<weapon> = Vec::new();
+    let mut top_weapons: Vec<Weapon> = Vec::new();
 
     for (key, value) in weapons.iter() {
-        let average_distance = value.accumulator_distance / value.amount_deaths as f32;
+        let average_distance = format!("{:.2}", value.accumulator_distance / value.amount_deaths as f32).parse::<f32>().unwrap();
         println!("Weapon: {}, Amount of deaths: {}, Average distance: {:.2}", key, value.amount_deaths, average_distance);
 
-        let weapon = weapon {
+        let weapon = Weapon {
             name: value.name.clone(),
             amount_deaths: value.amount_deaths,
-            percentage_deaths: format!("{:.2}", (value.amount_deaths as f32 / total_kills as f32) * 100.0).parse::<f32>().unwrap(),
+            deaths_percentage: format!("{:.2}", (value.amount_deaths as f32 / total_kills as f32) * 100.0).parse::<f32>().unwrap(),
             average_distance: average_distance,
         };
 
@@ -167,8 +170,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Get the top 10.
     for weapon in top_weapons.iter().take(10) {
-        println!("Weapon: {}, Percentage of deaths: {}, Average distance: {:.2}", weapon.name, weapon.percentage_deaths, weapon.average_distance);
+        println!("Weapon: {}, Percentage of deaths: {}, Average distance: {}", weapon.name, weapon.deaths_percentage, weapon.average_distance);
     }
+
+    // Create a JSON output.
+    let output_json = OutputJson {
+        padron: 94455,
+        top_weapons: top_weapons.iter().take(10).map(|weapon| {
+            (weapon.name.clone(), WeaponStats {
+                deaths_percentage: weapon.deaths_percentage,
+                average_distance: weapon.average_distance,
+            })
+        }).collect(),
+    };
+
+    write_json_to_file(&output_json, &output_json_name)?;
 
     Ok(())
 }
