@@ -6,18 +6,18 @@ use serde::Serialize;
 use std::io::Write;
 use std::collections::HashMap;
 
-#[derive(Serialize)]
-struct killer {
-    padron: u32,
-    top_killers: u8,
-    top_weapons: bool,
+#[derive(Serialize, Debug)]
+struct row_weapon {
+    name: String,
+    amount_deaths: u32,
+    accumulator_distance: f32,
 }
 
 #[derive(Serialize)]
 struct weapon {
-    padron: u32,
-    top_killers: u8,
-    top_weapons: bool,
+    name: u32,
+    amount_deaths: u32,
+    average_distance: u32,
 }
 
 #[derive(Serialize)]
@@ -89,22 +89,64 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Go back to the start of the file.
     rdr.seek(csv::Position::new())?;
 
-    let mut scores = HashMap::new();
+    let mut weapons: HashMap<String, row_weapon> = HashMap::new();
 
     rdr.records().next();
     for result in rdr.records() {
         let record = result?;
-        let key = record.get(0).unwrap().to_string();
-        if scores.contains_key(&key) {
-            let current_score = scores.get(&key).unwrap();
-            scores.insert(key.clone(), current_score + 1);
+        let weapon_name = record.get(0).unwrap().to_string();
+
+        if weapons.contains_key(&weapon_name) {
+            if let Some(current_weapon) = weapons.get_mut(&weapon_name) {
+                current_weapon.amount_deaths += 1;
+                current_weapon.accumulator_distance += {
+                    let kill_x_position = record.get(3).and_then(|s| s.parse::<f32>().ok());
+                    let kill_y_position = record.get(4).and_then(|s| s.parse::<f32>().ok());
+                    let victim_x_position = record.get(10).and_then(|s| s.parse::<f32>().ok());
+                    let victim_y_position = record.get(11).and_then(|s| s.parse::<f32>().ok());
+                
+                    match (kill_x_position, kill_y_position, victim_x_position, victim_y_position) {
+                        (Some(kill_x_position), Some(kill_y_position), Some(victim_x_position), Some(victim_y_position)) => {
+                            let distance = ((kill_x_position - victim_x_position).powi(2) + (kill_y_position - victim_y_position).powi(2)).sqrt();
+                            format!("{:.2}", distance).parse::<f32>().unwrap_or(0.0)
+                        }
+                        _ => 0.0,
+                    }
+                };
+            }
+
         } else {
-            scores.insert(key.clone(), 1);
+
+            let row_weapon = row_weapon {
+                name: weapon_name.clone(),
+                amount_deaths: 1,
+                accumulator_distance: {
+                    let kill_x_position = record.get(3).and_then(|s| s.parse::<f32>().ok());
+                    let kill_y_position = record.get(4).and_then(|s| s.parse::<f32>().ok());
+                    let victim_x_position = record.get(10).and_then(|s| s.parse::<f32>().ok());
+                    let victim_y_position = record.get(11).and_then(|s| s.parse::<f32>().ok());
+                
+                    match (kill_x_position, kill_y_position, victim_x_position, victim_y_position) {
+                        (Some(kill_x_position), Some(kill_y_position), Some(victim_x_position), Some(victim_y_position)) => {
+                            let distance = ((kill_x_position - victim_x_position).powi(2) + (kill_y_position - victim_y_position).powi(2)).sqrt();
+                            format!("{:.2}", distance).parse::<f32>().unwrap_or(0.0)
+                        }
+                        _ => 0.0,
+                    }
+                },
+            };
+
+            weapons.insert(weapon_name.clone(), row_weapon);
         }
-        // println!("{:?}", record);
     }
 
-    println!("{:?}", scores);
+    for (key, value) in weapons.iter() {
+        let average_distance = value.accumulator_distance / value.amount_deaths as f32;
+        println!("Weapon: {}, Amount of deaths: {}, Average distance: {:.2}", key, value.amount_deaths, average_distance);
+    }
+
+    // TODO: Sort the weapons by the amount of kills, then by the name of the weapon, and get the top 10.
+
 
     Ok(())
 }
