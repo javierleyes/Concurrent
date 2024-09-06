@@ -18,6 +18,7 @@ struct row_weapon {
 struct weapon {
     name: String,
     amount_deaths: u32,
+    percentage_deaths: f32,
     average_distance: f32,
 }
 
@@ -150,6 +151,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let weapon = weapon {
             name: value.name.clone(),
             amount_deaths: value.amount_deaths,
+            percentage_deaths: format!("{:.2}", (value.amount_deaths as f32 / total_kills as f32) * 100.0).parse::<f32>().unwrap(),
             average_distance: average_distance,
         };
 
@@ -165,7 +167,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Get the top 10.
     for weapon in top_weapons.iter().take(10) {
-        println!("Weapon: {}, Amount of deaths: {}, Average distance: {:.2}", weapon.name, weapon.amount_deaths, weapon.average_distance);
+        println!("Weapon: {}, Percentage of deaths: {}, Average distance: {:.2}", weapon.name, weapon.percentage_deaths, weapon.average_distance);
     }
 
     Ok(())
